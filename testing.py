@@ -15,6 +15,7 @@ def test_intercept_request(url: str) -> str:
 def main():
     url = test_url_builder()
     data = test_intercept_request(url)
-    scheduleme.parse(data)
+    tester = scheduleme.Course(data)
+    tester.parse()
     
 main()
