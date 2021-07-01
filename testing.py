@@ -3,7 +3,7 @@ import request_interception
 from icecream import ic
 
 def test_url_builder() -> str: 
-    url = scheduleme.url_builder("ch110", "spring", "2021")
+    url = scheduleme.url_builder("bu111", "fall", "2021")
     #ic(url)
     return url
 
