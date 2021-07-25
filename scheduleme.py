@@ -3,32 +3,45 @@ from icecream import ic
 from enum import Enum
 from bs4 import BeautifulSoup
 
-#TODO: Put it all in the object
-
-def url_builder(course: str, term: str, year: str) -> str:
+#TODO: Chrome path work on any machine
+class Helper:
     """
-    PARAMS:
-    course: The course number you want to access. For example, EC120 or MA129
-    term:   Either fall, winter, or spring. Case insensitive.
-    year:   Year in format yyyy
-    ...
-
-    RETURNS:
-    url:    Url built from your parameters
-
-    Builds a URL from given parameters
+    Helper class that does functions related to course information, but does not hold course information.
     """
+    def __init__(self):
+        None
 
-    term_val = Term[term.upper()].value #replace string term with appropriate number
-    splitcourse = re.split('(\d+)', course.upper()) #Splits course into a list, letters and numbers
+    def url_builder(self, course: str, term: str, year: str) -> str:
+        """
+        PARAMS:
+        course: The course number you want to access. For example, EC120 or MA129
+        term:   Either fall, winter, or spring. Case insensitive.
+        year:   Year in format yyyy
+        ...
 
-    url = ("https://scheduleme.wlu.ca/vsb/criteria.jsp?access=1&lang=en&tip=0&page=results&scratch=0"
-            "&advice=0&term={}{}&sort=none&filters=iiiiiiiiii&bbs=&ds=&cams=C_K_T_V_W_Z_CC_G_X_Y_MC"
-            "&locs=any&isrts=&course_0_0={}-{}&sa_0_0=&cs_0_0=--202105_373-374-&cpn_0_0=&csn_0_0=&ca_0_0="
-            "&dropdown_0_0=al&ig_0_0=0&rq_0_0=""".format(year, term_val, splitcourse[0], splitcourse[1]))
+        RETURNS:
+        url:    Url built from your parameters
 
-    ic(url)
-    return url
+        Builds a URL from given parameters
+        """
+
+        term_val = Term[term.upper()].value #replace string term with appropriate number
+        splitcourse = re.split('(\d+)', course.upper()) #Turns course code AA### into list [AA, ###]
+
+        url = ("https://scheduleme.wlu.ca/vsb/criteria.jsp?access=1&lang=en&tip=0&page=results&scratch=0"
+                "&advice=0&term={}{}&sort=none&filters=iiiiiiiiii&bbs=&ds=&cams=C_K_T_V_W_Z_CC_G_X_Y_MC"
+                "&locs=any&isrts=&course_0_0={}-{}&sa_0_0=&cs_0_0=--202105_373-374-&cpn_0_0=&csn_0_0=&ca_0_0="
+                "&dropdown_0_0=al&ig_0_0=0&rq_0_0=""".format(year, term_val, splitcourse[0], splitcourse[1]))
+
+        ic(url)
+        return url
+
+    def get_full_course_list(self) -> list:
+        """
+        This function gets a list of every currently running course at laurier
+        """
+        
+
 
 class Term(Enum):
     FALL = "09"
@@ -42,90 +55,90 @@ class Course:
     PARAMS:
     Takes classdata as a param
     """
-    #TODO: rawdata and class data should be switched lol. like the var names.
-    def __init__(self, classdata: str):
-        self.raw_data = BeautifulSoup(classdata, 'html.parser')
-        self.course_info = {}   #Information for the course regardless of section
-        self.lectures = []      #A list of different lecture dictionary objects
-        self.labs = []          #A list of lab dictionary objects
+    #TODO: Add a custom print function
 
-        self._time_blocks = []   #List of time block dictionaries for referncing by leccture and labs
+    def __init__(self, classdata: str):
+
+        self.raw_data = BeautifulSoup(classdata, 'html.parser')
+        self.course_info = {
+            'campus' : [],
+            'code' : None,
+            'title' : None,
+            'coreqs' : None,
+            'prereqs' : None,
+            'exclusions' : None,
+            'registration_notes' : None,
+            'description' : None,
+            'faculty' : None,
+            'term' : None,
+            'credits' : None,
+            'waiting_list' : None
+        }    #Information for the course regardless of section
+
+        self.lectures = []       #A list of different lecture dictionary objects
+        self.labs = []           #A list of lab dictionary objects
+        self.tutorials = []      #A list of tutorial dictionary objects
+
+        self._time_blocks = []   #List of time block dictionaries for referncing by leccture and labs. Not intended to be acccessed from the outside.
         self._CRN_list = []      #For simplicity, list of CRNs to avoid duplicates. Not intended to be acccessed from the outside.
 
     def parse(self):
         """"
-        ...
+        Parses the html into the objects
 
         RETURN:
-        Returns something
+        Returns 1 on success, -1 on failure
 
-        Parses information from the schedulme url.
-        TODO: Change this dumb 'course_tag' 'section_tag stuff. it doesnt make sense here
-        #TODO: All things considered she works pretty well. More testing, shit that is here. Need to make sure I exaplin shit when
-                I upload to github. Like how does timeblocks work. The structure of the thing. etc.
-        #TODO: Timezones. Make it work
-        #TODO: Make it dect the chrome path automatically.
+        TODO: Testing
+        TODO: Timezones. Make it work. I assume it does
+        TODO: Make it dect the chrome path automatically. Just by OS defaults
+        TODO: Make Registration notes work- use bu111
         """
         
         if self.raw_data.error is not None:
             print(self.raw_data.error)
             print("This course may be unavailable this term. Please also ensure your computers timezone is acccurate.")
-            return
+            return -1
 
         self._populate_course_info()
-        self._populate_timeblocks()
         self._populate_all_sections()
 
         ic(self.course_info)
         ic(self.lectures)
         ic(self.labs)
-        
-
-    def _add_course_element(self, tag: str, id: str, name: str): 
-        #Not currently in use
-        self.course_info[name] = getattr(self.raw_data, tag).get(id)
-        return
+        ic(self.tutorials)
 
     def _populate_course_info(self):
         """
         Populates the course_info local variable with necessary information
         """
-        course_tag = 'course'
+        #Get information from the course tag
         course_ids = {
-            #Used to iteratively grab all of the html elements i need and store them with more informative names.
-            #If you want to grab more variables from the html block just add them here
-            #format:   var_name_in_html : var_name_in_this_object
+            #Format is name_in_html : name_in_object
             'key': 'code',
             'title': 'title',
-            'cores': 'coreqs', #Never seen this used once.
-            'desc': 'description',
             'waiting': 'waiting_list',
             'faculty': 'faculty'
         }
-
-        self.course_info['campus'] = []
+        for id in course_ids:
+            self.course_info[course_ids[id]] = getattr(self.raw_data, 'course').get(id)
 
         #These all grab information from different tags, so they need to be handled separately
         for campus in self.raw_data.find_all('campus'):
-            self.course_info['campus'].append(campus.get('v'))
+            self.course_info['campus'].append(campus.get('v')) #Some classess have multiple campuses
         self.course_info['term'] = getattr(self.raw_data, 'term').get('v')
         self.course_info['credits'] = getattr(self.raw_data, 'block').get('credits')
+        
+        #Extract the prereqs and exclusions from the description.
+        self._parse_description()
 
-        #Get information from the course tag
-        for id in course_ids:
-            self.course_info[course_ids[id]] = getattr(self.raw_data, course_tag).get(id)
-        
-        #Extract the prereqs and exclusions from the description. Sorry for the long lines.
-        description = self.course_info['description']
-        self.course_info['prereqs'] = description[description.rfind('Prerequisites: </font>') + len('Prerequisites: </font>') : description.find('<br><font color="crimson">Exclusions:') - 1].strip(' .:')
-        self.course_info['exclusions'] = description[description.rfind('Exclusions: </font>') + len('Exclusions: </font>') : description.rfind('<br><font') - 1].strip(' .:')
-        
         return
 
     def _populate_all_sections(self):
         """
-        Populates all sections of the course. Mostly calls on the helper method _populate section
+        Populates all sections of the course. Mostly calls on the helper method _populate_section
         """
+        self._populate_timeblocks()
         for block in self.raw_data.find_all('block'): 
             if block['key'] in self._CRN_list:      #check for type and CRN to avoid duplicates
                 continue
@@ -133,6 +146,8 @@ class Course:
                 self.lectures.append(self._populate_section(block))
             elif block['type'] == 'Lab':
                 self.labs.append(self._populate_section(block))
+            elif block['type'] == "Tut":
+                self.tutorials.append(self._populate_section(block))
 
     def _populate_section(self, block: object) -> dict:
         """
@@ -142,59 +157,105 @@ class Course:
         RETURNS:
         section     a dictionary containing specific information we want
         """
-        section_tag = 'block'
+        self._CRN_list.append(block['key'])
+        section = {
+            'type' : None,
+            'CRN' : None,
+            'section' : None,
+            'open_seats' : None,
+            'max_seats' : None,
+            'instructor' : None,
+            'days' : [],
+            'start_time' : [],
+            'end_time' : []
+        }
+
         section_ids = {
             #Used to iteratively grab all of the html elements i need and store them with more informative names.
-            #If you want to grab more variables from the html block just add them here
             #format - var_name_in_html : var_name_in_this_object
             'type' : 'type',
             'key': 'CRN',
             'secno': 'section',
             'os': 'open_seats', 
             'me': 'max_seats', 
-            'nres': 'remaining_seats', #Isnt this the same as open seats?
             'teacher': 'instructor',
         }
-
-        self._CRN_list.append(block['key'])
-        section = {}
         
         for id in section_ids:
             section[section_ids[id]] = block.get(id) #get the section info from the soup object
 
         timeblocks = [int(x) if x.isdigit() else None for x in block.get('timeblockids').split(',')] #Get the timeblocks for this section
 
-        section['days'] = []        #Create the categories for day, start time, end time, in the dictionary for this section
-        section['start_time'] = []
-        section['end_time'] = []
-
         for x in timeblocks:        #Match the information from the appropriate timeblock to the section dictionary
             if x is not None:
                 section['days'].append(self._time_blocks[x]['day'])
-                section['start_time'].append(self._time_blocks[x]['start_time'])
-                section['end_time'].append(self._time_blocks[x]['end_time'])
+                section['start_time'].append(self._time_blocks[x]['t1'])
+                section['end_time'].append(self._time_blocks[x]['t2'])
             
         return section
 
     def _populate_timeblocks(self):
         """
-        Get the time blocks into the time block list for easy access
+        In the visual scheduled builder times are not directly associated with lecture sections, but instead
+        diffferent 'timeblocks' are given, and lecture sections are associated with those timeblocks. This
+        grabs the timeblocks into a format that will make it easy to associate a time with a lecture section.
         """
-        timeblock_ids = {
-            'id' : 'id',
-            'day' : 'day',
-            't1' : 'start_time',
-            't2' : 'end_time'
-        }
+        timeblock_ids = ['id','day','t1','t2']
 
         self._time_blocks.append(None) #This is to occupy element 0. This means the index in the list will match the time block id!
 
         for timeblock in self.raw_data.find_all('timeblock'):
-            dict_block = {}
+            dict_block = { 
+                'id' : None,
+                'day' : None,
+                't1' : None,
+                't2' : None
+            }
             for id in timeblock_ids:
-                dict_block[timeblock_ids[id]] = timeblock.get(id)
+                dict_block[id] = timeblock.get(id)
             self._time_blocks.append(dict_block)
         return
+    
+    def _parse_description(self):
+        """
+        Parses the description into description, prereqs, exclusions, and coreqs
+        """
+        html_desc = getattr(self.raw_data, 'course').get('desc')
+        description = BeautifulSoup(html_desc, 'html.parser').text
 
+        #Does this course have prerequisites? Exclusions? lets find out!
+        requisites = {
+            'prerequisites' : None,
+            'exclusions' : None,
+            'co-requisites' : None,
+            'registration notes' : None
+        }
+        included = []
+
+        for req in requisites:
+            x = description.lower().find(req)
+            if x != -1:
+                included.append((req, x, x + len(req))) #Three element tuple containing the term, the position of the first character, and position of the last
+
+        included.sort(key = lambda x: x[1]) #Sorts the requisites by order they appear so we can grab content between them
+        
+        if len(included) == 0:
+            self.course_info['description'] = description
+        else:
+            included.append((None, -1, -1)) #Will simplify iterating to the end
+            self.course_info['description'] = description[:included[0][1]]
+            for i in range(len(included) - 1): #Iterate to all but the last item, aka the item we just added.
+                requisites[included[i][0]] = (description[included[i][2] : included[i+1][1]]).strip(' .:')#Add it to the dictionary as the substring between the end of its label and ths start of the next label
+
+        #rename these to be easier to work with
+        self.course_info['prereqs'] = requisites['prerequisites']
+        self.course_info['coreqs'] = requisites['co-requisites']
+        self.course_info['registration_notes'] = requisites['registration notes']
+        
+
+
+
+                
 
         
+
