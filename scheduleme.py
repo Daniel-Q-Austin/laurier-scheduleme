@@ -4,6 +4,8 @@ from enum import Enum
 from bs4 import BeautifulSoup
 
 #TODO: Chrome path work on any machine
+#TODO: add getter methods and print methods
+#TODO: URL to use: https://scheduleme.wlu.ca/vsb/criteria.jsp
 class Helper:
     """
     Helper class that does functions related to course information, but does not hold course information.
@@ -30,17 +32,23 @@ class Helper:
 
         url = ("https://scheduleme.wlu.ca/vsb/criteria.jsp?access=1&lang=en&tip=0&page=results&scratch=0"
                 "&advice=0&term={}{}&sort=none&filters=iiiiiiiiii&bbs=&ds=&cams=C_K_T_V_W_Z_CC_G_X_Y_MC"
-                "&locs=any&isrts=&course_0_0={}-{}&sa_0_0=&cs_0_0=--202105_373-374-&cpn_0_0=&csn_0_0=&ca_0_0="
-                "&dropdown_0_0=al&ig_0_0=0&rq_0_0=""".format(year, term_val, splitcourse[0], splitcourse[1]))
+                "&locs=any&isrts=&course_0_0={}-{}&sa_0_0=&cs_0_0=--{}{}_373-374-&cpn_0_0=&csn_0_0=&ca_0_0="
+                "&dropdown_0_0=al&ig_0_0=0&rq_0_0=""".format(year, term_val, splitcourse[0], splitcourse[1], year, term_val))
 
         ic(url)
         return url
 
     def get_full_course_list(self) -> list:
         """
-        This function gets a list of every currently running course at laurier
+        This function gets a list of every course that has/is/will run in at laurier during the four available terms on VSB.
         """
-        
+        years = [2020, 2021, 2022, 2023, 2024, 2025, 2026, 2027] #If people in 2028 want me to update it they can email me
+
+        full_course_list = []
+
+
+
+
 
 
 class Term(Enum):
@@ -251,11 +259,3 @@ class Course:
         self.course_info['prereqs'] = requisites['prerequisites']
         self.course_info['coreqs'] = requisites['co-requisites']
         self.course_info['registration_notes'] = requisites['registration notes']
-        
-
-
-
-                
-
-        
-
