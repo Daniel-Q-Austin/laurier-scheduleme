@@ -5,7 +5,10 @@ from bs4 import BeautifulSoup
 
 #TODO: Chrome path work on any machine
 #TODO: add getter methods and print methods
-#TODO: URL to use: https://scheduleme.wlu.ca/vsb/criteria.jsp
+#TODO: URL to use: https://scheduleme.wlu.ca/vsb/criteria.jsp or not. look @ parsing notes.
+#TODO: Figure out term dynamically, and URL to get the fuckin dropdown lsit. Need the right URL!!!!
+    #But maybe it doesnt matter and the dropdown is the same either way????
+#TODO: Add a fucking TERM setting and get rid of the TERM input. It will scan
 class Helper:
     """
     Helper class that does functions related to course information, but does not hold course information.
