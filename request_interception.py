@@ -46,22 +46,6 @@ async def _intercept_network_response(response):
         ic(response.url)
         classdata = await response.text()
 
-async def _get_dropdown_response(response, letter) -> list:
-
-    #Not currently in use
-    return
-    global course_list
-    ic(response.url)
-    if "add_suggest.jsp" in response.url:
-        html_response = BeautifulSoup(response.text, 'html.parser')
-        ic(html_response)
-        for course in html_response.find_all('rs'):
-            course_list.append(course.get("reason"))
-
-    ic(course_list)
-
-
-
 async def _get_dropdown(url : str, class_list : list) -> list:
     """
     Process to click on the search bar, type a letter,
@@ -131,9 +115,3 @@ async def _parse_courses(ordered_list: list) -> list:
                             full_course_list.append(course.text.replace(" ", ""))
 
     return(full_course_list)
-
-
-def _add_to_list(response : str, letter : str, response_list : list) -> list:
-    """
-    Checks the response to see if the dropdown list is showing courses that no longer start with the letter
-    """
