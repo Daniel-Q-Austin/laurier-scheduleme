@@ -1,13 +1,23 @@
 import asyncio
 from bs4 import BeautifulSoup
+import sys
 from pyppeteer import launch
 from icecream import ic
 import string
 import time
 
 
-#CHROME_PATH = "/usr/bin/google-chrome"
-CHROME_PATH = "C:\Program Files\Google\Chrome\Application\chrome.exe"
+CHROME_PATH = None
+
+#This tries to guess your chrome path but if it's not right you will need to manually adjust.
+if sys.platform.startswith('linux'):
+    CHROME_PATH = "/usr/bin/google-chrome"
+elif sys.platform.startswith('darwin'):
+    CHROME_PATH = "MAC_PPATH"
+elif sys.platform.startswith('win32'):
+    CHROME_PATH = "C:\Program Files\Google\Chrome\Application\chrome.exe"
+
+
 classdata = None
 course_list = []
 
@@ -16,8 +26,9 @@ def intercept_request(url: str) -> str:
 
     return asyncio.get_event_loop().run_until_complete(_get_classdata(url))
 
-def click_dropdown(url: str, classlist: list) -> list:
-    return asyncio.get_event_loop().run_until_complete(_get_dropdown(url, classlist))
+def get_class_list(url: str) -> list:
+    "Gets a class list from the TERM that is selected in the given URL."
+    return asyncio.get_event_loop().run_until_complete(_get_dropdown(url))
 
 async def _get_classdata(url: str) -> str:
     """
@@ -46,29 +57,23 @@ async def _intercept_network_response(response):
         ic(response.url)
         classdata = await response.text()
 
-async def _get_dropdown(url : str, class_list : list) -> list:
+async def _get_dropdown(url : str) -> list:
     """
     Process to click on the search bar, type a letter,
-    and return the list that follows
+    and return the list that follows. Repeat for every iterator character.
+
+    RETURNS: A full course list for the term given by the link
     """
-    #TODO: PArse the terms here!!!!
-    #TODO: Fucking error handlign for interent time out
-    #TODO: Course start with numbers!!!
-    #They look like this "<rs id="6" info="(Fall 2021 only)<br/>Optimization" reqId="" reason="TITLE">MA 372</rs>""
-    #I can figure out the term frmo the info!!!!
-    browser = await launch(headless=False, devtools=False, executablePath=CHROME_PATH)
+    browser = await launch(headless=True, devtools=False, executablePath=CHROME_PATH)
     page = await browser.newPage()
 
     letterlist = []
     ordered_list = []
     iterator_key = 'abcdefghijklmnopqrstuvwxyz0123456789'
 
-    binary = False
-    #page.on('response', lambda response: ic(response.url))
     page.on('response', lambda response: letterlist.append(response))
     await page.goto(url, waitUntil=["networkidle2", "domcontentloaded"])
 
-    
     for letter in iterator_key:
         await page.click("#code_number")
         await page.keyboard.type(letter, waitUntil=["networkidle2"])
@@ -89,27 +94,23 @@ async def _get_dropdown(url : str, class_list : list) -> list:
         ordered_list.append((letter, letterlist)) #Add it to a tuple with teh letter as the first element 
         letterlist = []                            #so we can compare the starting letter of the course code to that letter
                                                 
-    #ic(ordered_list)
-    full_course_list = await _parse_courses(ordered_list)
-    ic(full_course_list)
+    full_course_list = await _sort_and_filter_courses(ordered_list)
+    await browser.close()
     return(full_course_list)
 
-async def _parse_courses(ordered_list: list) -> list:
+async def _sort_and_filter_courses(ordered_list: list) -> list:
     """
     Take the list of tuples containing all of the unparsed courses and puts
     them into a single list of every course at laurier.
-    This will ACTUALLLY ONLY GET EVERY COURSE OFFERED THE TERM WE ARE LOOKING AT,
-    WHICH IS PROVIDED BY THE ORIGINAL URL. 
+    This will ACTUALLLY ONLY GET EVERY COURSE OFFERED THE TERM WE ARE LOOKING AT
     """
     full_course_list = []
     for tupler in ordered_list:
         for response in tupler[1]:
             if "add_suggest" in response.url:
-                #ic(response.url)
                 response_html = await response.text()
                 rs = BeautifulSoup(response_html, 'lxml-xml')
                 for course in rs.find_all('rs'):
-                    #ic(course.get('info'), course.text)
                     if (' only)' not in course.get('info')) and (course.text != '_more_'): #It is a course, and it is this term
                         if course.text[0].lower() == tupler[0]: #check if the first letter of the course code is the same as the letter typed for that passthrough
                             full_course_list.append(course.text.replace(" ", ""))

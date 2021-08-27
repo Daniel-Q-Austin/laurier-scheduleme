@@ -1,64 +1,10 @@
+from os import write
 import re
 from icecream import ic
 from enum import Enum
 from bs4 import BeautifulSoup
-
-#TODO: Chrome path work on any machine
-#TODO: add getter methods and print methods
-#TODO: URL to use: https://scheduleme.wlu.ca/vsb/criteria.jsp or not. look @ parsing notes.
-#TODO: Figure out term dynamically, and URL to get the fuckin dropdown lsit. Need the right URL!!!!
-    #But maybe it doesnt matter and the dropdown is the same either way????
-#TODO: Add a fucking TERM setting and get rid of the TERM input. It will scan
-class Helper:
-    """
-    Helper class that does functions related to course information, but does not hold course information.
-    """
-    def __init__(self):
-        None
-
-    def url_builder(self, course: str, term: str, year: str) -> str:
-        """
-        PARAMS:
-        course: The course number you want to access. For example, EC120 or MA129
-        term:   Either fall, winter, or spring. Case insensitive.
-        year:   Year in format yyyy
-        ...
-
-        RETURNS:
-        url:    Url built from your parameters
-
-        Builds a URL from given parameters
-        """
-
-        term_val = Term[term.upper()].value #replace string term with appropriate number
-        splitcourse = re.split('(\d+)', course.upper()) #Turns course code AA### into list [AA, ###]
-
-        url = ("https://scheduleme.wlu.ca/vsb/criteria.jsp?access=1&lang=en&tip=0&page=results&scratch=0"
-                "&advice=0&term={}{}&sort=none&filters=iiiiiiiiii&bbs=&ds=&cams=C_K_T_V_W_Z_CC_G_X_Y_MC"
-                "&locs=any&isrts=&course_0_0={}-{}&sa_0_0=&cs_0_0=--{}{}_373-374-&cpn_0_0=&csn_0_0=&ca_0_0="
-                "&dropdown_0_0=al&ig_0_0=0&rq_0_0=""".format(year, term_val, splitcourse[0], splitcourse[1], year, term_val))
-
-        ic(url)
-        return url
-
-    def get_full_course_list(self) -> list:
-        """
-        This function gets a list of every course that has/is/will run in at laurier during the four available terms on VSB.
-        """
-        years = [2020, 2021, 2022, 2023, 2024, 2025, 2026, 2027] #If people in 2028 want me to update it they can email me
-
-        full_course_list = []
-
-
-
-
-
-
-class Term(Enum):
-    FALL = "09"
-    WINTER = "01"
-    SPRING = "05"
-
+import request_interception
+import time
 class Course:
     """
     Object containing the course information we need
@@ -68,11 +14,15 @@ class Course:
     """
     #TODO: Add a custom print function
 
-    def __init__(self, classdata: str):
+    def __init__(self, course_code, term, year): #Remove classdata
 
+        url = self.url_builder(course_code, term, year)
+        classdata = request_interception.intercept_request(url)
         self.raw_data = BeautifulSoup(classdata, 'html.parser')
+
         self.course_info = {
             'campus' : [],
+            'url' : url,
             'code' : None,
             'title' : None,
             'coreqs' : None,
@@ -93,6 +43,41 @@ class Course:
         self._time_blocks = []   #List of time block dictionaries for referncing by leccture and labs. Not intended to be acccessed from the outside.
         self._CRN_list = []      #For simplicity, list of CRNs to avoid duplicates. Not intended to be acccessed from the outside.
 
+        self.parse()
+
+    def url_builder(self, course: str, term: str, year: str) -> str:
+        """
+        PARAMS:
+        course: The course number you want to access. For example, EC120 or MA129
+        term:   Either fall, winter, or spring. Case insensitive.
+        year:   Year in format yyyy
+        ...
+
+        RETURNS:
+        url:    Url built from your parameters
+
+        Builds a URL from given parameters
+        """
+
+        term_val = Term[term.upper()].value #replace string term with appropriate number
+        if course[0] in '0123456789':
+            course_dpt = course[:2]
+            course_num = course[2:]
+        else:
+            splitcourse = re.split('(\d+)', course.upper()) #Turns course code AA### into list [AA, ###]
+            course_dpt = splitcourse[0]
+            course_num = splitcourse[1]
+            if len(splitcourse) == 3:
+                course_num += splitcourse[2] #Some courses have a letter after the number that is part of the course number.
+
+        url = ("https://scheduleme.wlu.ca/vsb/criteria.jsp?access=1&lang=en&tip=0&page=results&scratch=0"
+                "&advice=0&term={}{}&sort=none&filters=iiiiiiiiii&bbs=&ds=&cams=C_K_T_V_W_Z_CC_G_X_Y_MC"
+                "&locs=any&isrts=&course_0_0={}-{}&sa_0_0=&cs_0_0=--{}{}_373-374-&cpn_0_0=&csn_0_0=&ca_0_0="
+                "&dropdown_0_0=al&ig_0_0=0&rq_0_0=").format(year, term_val, course_dpt, course_num, year, term_val)
+
+        ic(url)
+        return url
+
     def parse(self):
         """"
         Parses the html into the objects
@@ -102,8 +87,6 @@ class Course:
 
         TODO: Testing
         TODO: Timezones. Make it work. I assume it does
-        TODO: Make it dect the chrome path automatically. Just by OS defaults
-        TODO: Make Registration notes work- use bu111
         """
         
         if self.raw_data.error is not None:
@@ -178,7 +161,8 @@ class Course:
             'instructor' : None,
             'days' : [],
             'start_time' : [],
-            'end_time' : []
+            'end_time' : [],
+            'location' : None
         }
 
         section_ids = {
@@ -190,6 +174,7 @@ class Course:
             'os': 'open_seats', 
             'me': 'max_seats', 
             'teacher': 'instructor',
+            'location' : 'location',
         }
         
         for id in section_ids:
@@ -233,6 +218,7 @@ class Course:
         """
         html_desc = getattr(self.raw_data, 'course').get('desc')
         description = BeautifulSoup(html_desc, 'html.parser').text
+        description += " " #litrerally dont even worry about it
 
         #Does this course have prerequisites? Exclusions? lets find out!
         requisites = {
@@ -262,3 +248,123 @@ class Course:
         self.course_info['prereqs'] = requisites['prerequisites']
         self.course_info['coreqs'] = requisites['co-requisites']
         self.course_info['registration_notes'] = requisites['registration notes']
+
+
+class CSV_Helper:
+    """
+    Helper class that does functions related to course information, but does not hold course information.
+    """
+    def __init__(self, starting_year):
+        self.term_list = [
+            ('spring', int(starting_year)),
+            ('fall', int(starting_year)),
+            ('winter', int(starting_year)+1),
+            ('spring', int(starting_year)+1)
+        ]
+
+    def _dropdown_url_builder(self, term, year) -> str:
+        """
+        Builds the URL to get to the dropdown which is used to get the full course list
+        """
+
+        term_val = Term[term.upper()].value
+
+        url = ("https://scheduleme.wlu.ca/vsb/criteria.jsp?access=0&lang=en&tip=1&page=criteria&scratch=0"
+               "&advice=0&term={}{}&sort=none&filters=iiiiiiiiii&bbs=&ds=&cams=C_K_T_V_W_Z_CC_G_X_Y_MC"
+               "&locs=any&isrts=").format(year, term_val)
+
+        return url
+
+    def get_full_course_list(self) -> dict:
+        """
+        This function gets a list of every course that has/is/will run in at laurier during the four available terms on VSB.
+
+        starting_year: The earliest year that can be seen on the visual schedule builder.
+                        So I can see courses in 2021 and 2022 right now, so I'd input 2021.
+        """
+
+        print("Getting full course list. \nThis will take 15-20 minutes. Please wait and ensure your computer does not disconnect from the internet.")
+
+
+        all_courses = [] #Will contain 4 lists, each with the courses frmo that term.
+
+        for term in self.term_list:
+            print("Getting courses from {} {}...".format(term[0], term[1]))
+            url = self._dropdown_url_builder(term[0], term[1])
+            temp_list = request_interception.get_class_list(url)
+            temp_list.insert(0, '{} {}'.format(term[0], term[1])) #add the term to the start of the list
+            all_courses.append(temp_list)
+
+        return all_courses
+    
+    def write_course_list_to_text(self, course_list):
+        """
+        It is necessary to store the course list somewhere since sometimes the program crashes
+        """
+        for term in course_list:
+            txtlist = open(term[0] + '.txt', 'w+') #The first term in the returned course list is 'spring 2021', 'winter 2022' etc.
+            txtlist.writelines(course + '\n' for course in term[1:])
+            txtlist.close()
+
+    def build_csv(self):
+        """
+        Build a csv from the course list text tiles, which obviously must already exist
+        """
+        separator = '@'
+        for index, term in enumerate(self.term_list):
+            if index == 0:
+                continue
+            read_file = open("{} {}.txt".format(term[0], term[1]), "r")
+            write_file = open("{} {}.csv".format(term[0], term[1]), "w+")
+            headers = ["Course Code", "Title", "Campus", "Link", "Description","Remaining Seats", "Locations", "Prerequisites", "Exclusions", "Registration Notes"]
+            for i in headers:
+                write_file.write(i)
+                write_file.write(separator)
+            write_file.write('\n')
+
+            write_file.write('{} {} Courses {}{}{} For Other Terms See Other Tabs of Spreadsheet Below'.format(term[0], term[1], separator, separator, separator))
+            write_file.write('\n')
+
+            for course_code in read_file.read().splitlines():
+                course = Course(course_code, term[0], term[1])
+                
+                title = course.course_info['title']
+                campus = ""
+                for campuses in course.course_info['campus']:
+                    campus += campuses + ', '
+                campus = campus[:-2]
+
+                link = '=HYPERLINK("{}", "LINK")'.format(course.course_info['url']) #must be adjusted to a comma in post
+                description = course.course_info['description']
+
+                seats = 0
+                locations = ""
+                for lecture in course.lectures:
+                    seats += int(lecture['open_seats'])
+                    if lecture['location'] not in locations:
+                        locations += lecture['location']
+                        locations += ', '
+                locations = locations[:-2]
+
+                prereqs = course.course_info['prereqs']
+                exclusions = course.course_info['exclusions']
+                registration_notes = course.course_info['registration_notes']
+
+                spreadsheet_list = [course_code, title, campus, link, description, seats, locations, prereqs, exclusions, registration_notes]
+                for item in spreadsheet_list:
+                    if item == None or item == "":
+                        item == "None"
+                    write_file.write(str(item))
+                    write_file.write(separator)
+                time.sleep(3)
+                write_file.write('\n')
+            read_file.close()
+            write_file.close()
+
+
+
+class Term(Enum):
+    FALL = "09"
+    WINTER = "01"
+    SPRING = "05"
+    SUMMER = "05"
